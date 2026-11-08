@@ -353,7 +353,7 @@ local getSnowRadiusScale = createSlider(
 local clearSnowButton = Instance.new("TextButton")
 clearSnowButton.Name = "ClearGroundSnow"
 clearSnowButton.Size = UDim2.new(1, -30, 0, 38)
-clearSnowButton.Position = UDim2.new(0, 15, 0, 205)
+clearSnowButton.Position = UDim2.new(0, 15, 0, 250)
 clearSnowButton.BackgroundColor3 = Color3.fromRGB(150, 65, 65)
 clearSnowButton.Text = "Удалить снег с земли"
 clearSnowButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -367,17 +367,18 @@ clearCorner.CornerRadius = UDim.new(0, 9)
 clearCorner.Parent = clearSnowButton
 
 clearSnowButton.MouseButton1Click:Connect(function()
-    groundSnowEnabled = false
     groundFolder:ClearAllChildren()
 
     clearSnowButton.Text = "Наземный снег удалён"
     clearSnowButton.BackgroundColor3 = Color3.fromRGB(65, 110, 75)
 end)
 
+-- КНОПКА СКРЫТИЯ НАЗЕМНОГО СНЕГА
+
 local groundSnowToggle = Instance.new("TextButton")
 groundSnowToggle.Name = "GroundSnowToggle"
 groundSnowToggle.Size = UDim2.new(1, -30, 0, 35)
-groundSnowToggle.Position = UDim2.new(0, 15, 0, 250)
+groundSnowToggle.Position = UDim2.new(0, 15, 0, 300)
 groundSnowToggle.BackgroundColor3 = Color3.fromRGB(70, 120, 70)
 groundSnowToggle.TextColor3 = Color3.new(1, 1, 1)
 groundSnowToggle.Text = "Снег на земле: ВКЛ"
