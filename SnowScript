@@ -573,14 +573,6 @@ UserInputService.InputEnded:Connect(function(input)
 
             if not miniMoved then
 
-                main.Position = UDim2.new(
-                    miniButton.Position.X.Scale,
-                    miniButton.Position.X.Offset - 125,
-
-                    miniButton.Position.Y.Scale,
-                    miniButton.Position.Y.Offset - 120
-                )
-
                 main.Visible = true
                 miniButton.Visible = false
 
