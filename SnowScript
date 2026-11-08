@@ -347,6 +347,35 @@ local getSnowRadiusScale = createSlider(
     1.5,
     0.5
 )
+
+-- КНОПКА УДАЛЕНИЯ НАЗЕМНОГО СНЕГА
+
+
+local groundSnowEnabled = true
+
+local clearSnowButton = Instance.new("TextButton")
+clearSnowButton.Name = "ClearGroundSnow"
+clearSnowButton.Size = UDim2.new(1, -30, 0, 38)
+clearSnowButton.Position = UDim2.new(0, 15, 0, 250)
+clearSnowButton.BackgroundColor3 = Color3.fromRGB(150, 65, 65)
+clearSnowButton.Text = "Удалить снег с земли"
+clearSnowButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+clearSnowButton.TextSize = 14
+clearSnowButton.Font = Enum.Font.GothamBold
+clearSnowButton.BorderSizePixel = 0
+clearSnowButton.Parent = main
+
+local clearCorner = Instance.new("UICorner")
+clearCorner.CornerRadius = UDim.new(0, 9)
+clearCorner.Parent = clearSnowButton
+
+clearSnowButton.MouseButton1Click:Connect(function()
+    groundSnowEnabled = false
+    groundFolder:ClearAllChildren()
+
+    clearSnowButton.Text = "Наземный снег удалён"
+    clearSnowButton.BackgroundColor3 = Color3.fromRGB(65, 110, 75)
+end)
 --========================================================
 -- ПЕРЕМЕЩЕНИЕ ОКНА
 --========================================================
@@ -716,13 +745,37 @@ task.spawn(function()
                             hit:IsA("BasePart")
                             and hit.Anchored
                         )
+					local isFloor =
+    					result.Normal.Y >= 0.85
 
-                    local isFloor =
-                        result.Normal.Y >= 0.85
+					local isLargeEnough = true
 
-                    if isStatic and isFloor then
-                        break
-                    end
+					if hit:IsA("BasePart") then
+    					local localNormal =
+        					hit.CFrame:VectorToObjectSpace(result.Normal)
+
+    					local absNormal = Vector3.new(
+        					math.abs(localNormal.X),
+        					math.abs(localNormal.Y),
+        					math.abs(localNormal.Z)
+    					)
+
+    					local sizeA, sizeB
+
+    					if absNormal.X >= absNormal.Y and absNormal.X >= absNormal.Z then
+        					sizeA, sizeB = hit.Size.Y, hit.Size.Z
+    					elseif absNormal.Y >= absNormal.X and absNormal.Y >= absNormal.Z then
+        					sizeA, sizeB = hit.Size.X, hit.Size.Z
+    					else
+        					sizeA, sizeB = hit.Size.X, hit.Size.Y
+    					end
+
+    					isLargeEnough = sizeA >= 5 and sizeB >= 5
+					end
+
+					if isStatic and isFloor and isLargeEnough then
+    					break
+					end
 
                     table.insert(excluded, hit)
                     result = nil
