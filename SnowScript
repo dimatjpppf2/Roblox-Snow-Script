@@ -590,153 +590,228 @@ RunService.RenderStepped:Connect(function()
 end)
 
 
+
 --========================================================
--- ❄️ СНЕГ НА ЗЕМЛЕ
+-- ❄️ СНЕЖНОЕ ПОКРЫТИЕ ТЕКСТУРОЙ
+--========================================================
+print("SNOW GROUND SYSTEM STARTED")
+print("Texture ID:", "rbxassetid://2861800")
+
+local SNOW_TEXTURE_ID = "http://www.roblox.com/asset/?id=2861800"
+
+-- Размер повторения текстуры в студиях.
+-- Чем больше число, тем крупнее рисунок.
+local SNOW_TILE_SIZE = 8
+
+-- Прозрачность текстуры
+local SNOW_TRANSPARENCY = 0.12
+
+-- Радиус обработки вокруг камеры
+local GROUND_COVERAGE_RADIUS = 150
+
+-- Как часто проверять новые поверхности
+local SCAN_INTERVAL = 0.75
+
+-- Удаляем старые снежные Parts от прежней системы
+groundFolder:ClearAllChildren()
+
+-- Запоминаем текстуры, которые уже созданы
+local coveredParts = {}
+
+local overlapParams = OverlapParams.new()
+overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+overlapParams.FilterDescendantsInstances = {
+    snowFolder
+}
+
+--========================================================
+-- ПРОВЕРКА ПОДХОДЯЩЕЙ ДЕТАЛИ
 --========================================================
 
-local rayParams =
-	RaycastParams.new()
+local function isSnowSurface(part)
 
-local function createSnowPart(
-	position,
-	normal
-)
+    if not part:IsA("BasePart") then
+        return false
+    end
 
-	local snow =
-		Instance.new("Part")
+    -- Не покрываем импортированную геометрию
+    if part:IsA("MeshPart") then
+        return false
+    end
 
-	snow.Name = "Snow"
+    if part:IsA("UnionOperation") then
+        return false
+    end
 
-	snow.Size =
-		Vector3.new(
-			math.random(
-				MIN_SNOW_SIZE,
-				MAX_SNOW_SIZE
-			),
+    -- Только закреплённые детали
+    if not part.Anchored then
+        return false
+    end
 
-			0.12,
+    -- Пропускаем Parts с импортированной геометрией
+    if part:FindFirstChildWhichIsA("SpecialMesh") then
+        return false
+    end
 
-			math.random(
-				MIN_SNOW_SIZE,
-				MAX_SNOW_SIZE
-			)
-		)
+    -- Не покрываем персонажей и NPC
+    local model = part:FindFirstAncestorOfClass("Model")
 
-	snow.Anchored = true
+    if model and model:FindFirstChildOfClass("Humanoid") then
+        return false
+    end
 
-	snow.CanCollide = false
-	snow.CanTouch = false
-	snow.CanQuery = false
-
-	snow.Material =
-		Enum.Material.Snow
-
-	snow.Color =
-		Color3.fromRGB(
-			235,
-			240,
-			245
-		)
-
-	snow.Transparency = 0.05
-
-	snow.CFrame =
-		CFrame.new(
-			position
-				+ normal * 0.06
-		)
-
-	snow.Parent =
-		groundFolder
-
+    return true
 end
 
 --========================================================
--- ПОСТЕПЕННОЕ ПОЯВЛЕНИЕ СНЕГА НА ЗЕМЛЕ
+-- ВЫБОР ВЕРХНЕЙ ГРАНИ
 --========================================================
 
+local function getTopFace(part)
+
+    local up = part.CFrame.UpVector
+    local right = part.CFrame.RightVector
+    local look = part.CFrame.LookVector
+
+    local faces = {
+        {Enum.NormalId.Top, up},
+        {Enum.NormalId.Bottom, -up},
+        {Enum.NormalId.Right, right},
+        {Enum.NormalId.Left, -right},
+        {Enum.NormalId.Front, look},
+        {Enum.NormalId.Back, -look}
+    }
+
+    local bestFace = nil
+    local bestDot = -1
+
+    for _, data in ipairs(faces) do
+
+        local dot = data[2]:Dot(Vector3.yAxis)
+
+        if dot > bestDot then
+            bestDot = dot
+            bestFace = data[1]
+        end
+    end
+
+    -- Не покрываем практически вертикальные грани
+    if bestDot < 0.45 then
+        return nil
+    end
+
+    return bestFace
+end
+
 --========================================================
--- ❄️ СНЕГ ТОЛЬКО НА СТАТИЧНЫХ ПОВЕРХНОСТЯХ
+-- НАЛОЖЕНИЕ ТЕКСТУРЫ
+--========================================================
+
+local function applySnowTexture(part)
+    if not isSnowSurface(part) then
+        return
+    end
+
+    local face = getTopFace(part)
+    if not face then
+        print("NO TOP FACE:", part:GetFullName())
+        return
+    end
+
+    print("APPLYING SNOW:", part:GetFullName(), face)
+
+    local texture = Instance.new("Texture")
+
+    texture.Name = "LocalSnowTexture"
+    texture.Texture = SNOW_TEXTURE_ID
+    texture.Face = face
+
+    texture.StudsPerTileU = SNOW_TILE_SIZE
+    texture.StudsPerTileV = SNOW_TILE_SIZE
+
+    texture.Transparency = SNOW_TRANSPARENCY
+    texture.Color3 = Color3.fromRGB(245, 250, 255)
+
+    texture.Parent = part
+	task.delay(2, function()
+    	print(
+        "TEXTURE CHECK:",
+        texture.Parent,
+        texture.Texture,
+        texture.IsLoaded
+    	)
+	end)
+
+    coveredParts[part] = texture
+end
+
+--========================================================
+-- УДАЛЕНИЕ ПОКРЫТИЯ ВДАЛИ ОТ КАМЕРЫ
+--========================================================
+
+local function updateSnowCoverage()
+
+    local currentCamera = workspace.CurrentCamera
+
+    if not currentCamera then
+        return
+    end
+
+    local cameraPosition = currentCamera.CFrame.Position
+
+    -- Находим детали вокруг камеры
+    local nearbyParts = workspace:GetPartBoundsInRadius(
+        cameraPosition,
+        GROUND_COVERAGE_RADIUS,
+        overlapParams
+    )
+
+	print("Found parts:", #nearbyParts)
+
+    -- Добавляем снег новым деталям
+    for _, part in ipairs(nearbyParts) do
+        applySnowTexture(part)
+    end
+
+    -- Удаляем покрытие далеко от камеры
+    for part, texture in pairs(coveredParts) do
+
+        if not part.Parent then
+
+            coveredParts[part] = nil
+
+        else
+
+            local distance = (
+                part.Position - cameraPosition
+            ).Magnitude
+
+            local partRadius = part.Size.Magnitude / 2
+
+            if distance > GROUND_COVERAGE_RADIUS + partRadius then
+
+                texture:Destroy()
+                coveredParts[part] = nil
+
+            end
+        end
+    end
+end
+
+--========================================================
+-- ЦИКЛ ОБНОВЛЕНИЯ
 --========================================================
 
 task.spawn(function()
-    task.wait(2)
+
+    task.wait(1)
 
     while true do
-        local character = player.Character
-        local currentCamera = workspace.CurrentCamera
 
-        if character and currentCamera then
-            local randomX = math.random(-SNOW_RADIUS, SNOW_RADIUS)
-            local randomZ = math.random(-SNOW_RADIUS, SNOW_RADIUS)
+        updateSnowCoverage()
 
-            if randomX * randomX + randomZ * randomZ
-                <= SNOW_RADIUS * SNOW_RADIUS then
+        task.wait(SCAN_INTERVAL)
 
-                local origin =
-                    currentCamera.CFrame.Position
-                    + Vector3.new(randomX, SNOW_HEIGHT, randomZ)
-
-                local direction = Vector3.new(
-                    0,
-                    -SNOW_HEIGHT * 2,
-                    0
-                )
-
-                local excluded = {
-                    character,
-                    snowFolder
-                }
-
-                local result = nil
-
-                -- Пропускаем движущиеся объекты и стены
-                for attempt = 1, 12 do
-                    rayParams.FilterType =
-                        Enum.RaycastFilterType.Exclude
-
-                    rayParams.FilterDescendantsInstances =
-                        excluded
-
-                    result = workspace:Raycast(
-                        origin,
-                        direction,
-                        rayParams
-                    )
-
-                    if not result then
-                        break
-                    end
-
-                    local hit = result.Instance
-
-                    local isStatic =
-                        hit == workspace.Terrain
-                        or (
-                            hit:IsA("BasePart")
-                            and hit.Anchored
-                        )
-
-                    local isFloor =
-                        result.Normal.Y >= 0.85
-
-                    if isStatic and isFloor then
-                        break
-                    end
-
-                    table.insert(excluded, hit)
-                    result = nil
-                end
-
-                if result then
-                    createSnowPart(
-                        result.Position,
-                        result.Normal
-                    )
-                end
-            end
-        end
-
-        task.wait(getGroundDelay())
     end
+
 end)
