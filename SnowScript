@@ -1,67 +1,490 @@
---// ❄️ SNOW SYSTEM
---// Smooth startup / Low-end friendly
---// LocalScript → StarterPlayer > StarterPlayerScripts
+--// =====================================================
+--// ❄️ SNOW CONTROLLER
+--// LocalScript
+--// Помести в:
+--// StarterPlayer > StarterPlayerScripts
+--// =====================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
-local camera = Workspace.CurrentCamera
+local camera = workspace.CurrentCamera
 
---==================================================
+--========================================================
 -- НАСТРОЙКИ
---==================================================
+--========================================================
 
-local SNOW_RADIUS = 100
-local SNOW_HEIGHT = 45
-local SNOW_SPEED = 10
+local DEFAULT_PARTICLE_RATE = 400
 
-local GROUND_SPAWN_DELAY = 0.08
-local PARTICLE_RATE = 400
+-- Радиус снежной сферы вокруг камеры
+local SNOW_RADIUS = 150
 
-local GROUND_SIZE = 3
-local GROUND_THICKNESS = 0.08
+-- Высота, с которой появляется снег
+local SNOW_HEIGHT = 100
 
--- Максимальное количество снежных Part
--- одновременно существующих вокруг игрока.
-local MAX_SNOW_PARTS = 1000
+-- Насколько часто появляется снег на земле
+local DEFAULT_GROUND_DELAY = 0.08
 
--- Сколько Part создаётся за один небольшой цикл
-local PARTS_PER_BATCH = 2
+-- Размер снежных пятен
+local MIN_SNOW_SIZE = 3
+local MAX_SNOW_SIZE = 6
 
--- Интервал между маленькими партиями
-local BATCH_DELAY = 0.03
-
-local SNOW_COLOR =
-	Color3.fromRGB(245, 250, 255)
-
---==================================================
+--========================================================
 -- ПАПКИ
---==================================================
+--========================================================
 
-local snowFolder =
-	Instance.new("Folder")
+local snowFolder = workspace:FindFirstChild("LocalSnow")
 
-snowFolder.Name = "LocalSnow"
-snowFolder.Parent = Workspace
+if not snowFolder then
+	snowFolder = Instance.new("Folder")
+	snowFolder.Name = "LocalSnow"
+	snowFolder.Parent = workspace
+end
 
-local groundFolder =
-	Instance.new("Folder")
+local groundFolder = snowFolder:FindFirstChild("SnowParts")
 
-groundFolder.Name = "SnowParts"
-groundFolder.Parent = snowFolder
+if not groundFolder then
+	groundFolder = Instance.new("Folder")
+	groundFolder.Name = "SnowParts"
+	groundFolder.Parent = snowFolder
+end
 
---==================================================
--- СНЕГОПАД
---==================================================
+local emitterFolder = snowFolder:FindFirstChild("SnowEmitters")
 
-local snowEmitterPart =
-	Instance.new("Part")
+if emitterFolder then
+	emitterFolder:Destroy()
+end
 
-snowEmitterPart.Name =
-	"SnowEmitter"
+emitterFolder = Instance.new("Folder")
+emitterFolder.Name = "SnowEmitters"
+emitterFolder.Parent = snowFolder
+
+--========================================================
+-- GUI
+--========================================================
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "SnowController"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
+
+-----------------------------------------------------------
+-- ОСНОВНОЕ ОКНО
+-----------------------------------------------------------
+
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 300, 0, 310)
+main.Position = UDim2.new(0.5, -150, 0.5, -125)
+
+main.BackgroundColor3 = Color3.fromRGB(25, 32, 45)
+main.BorderSizePixel = 0
+main.Parent = gui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 14)
+mainCorner.Parent = main
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(90, 110, 140)
+mainStroke.Thickness = 1
+mainStroke.Transparency = 0.3
+mainStroke.Parent = main
+
+-----------------------------------------------------------
+-- ЗАГОЛОВОК
+-----------------------------------------------------------
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -60, 0, 45)
+title.Position = UDim2.new(0, 15, 0, 5)
+
+title.BackgroundTransparency = 1
+title.Text = "❄  Snow Controller"
+title.TextColor3 = Color3.fromRGB(235, 245, 255)
+title.TextSize = 20
+title.Font = Enum.Font.GothamBold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = main
+
+-----------------------------------------------------------
+-- КНОПКА СКРЫТЬ
+-----------------------------------------------------------
+
+local hideButton = Instance.new("TextButton")
+hideButton.Size = UDim2.new(0, 35, 0, 35)
+hideButton.Position = UDim2.new(1, -45, 0, 10)
+
+hideButton.BackgroundColor3 = Color3.fromRGB(40, 50, 68)
+hideButton.Text = "−"
+hideButton.TextColor3 = Color3.fromRGB(220, 230, 240)
+hideButton.TextSize = 22
+hideButton.Font = Enum.Font.GothamBold
+hideButton.BorderSizePixel = 0
+hideButton.Parent = main
+
+local hideCorner = Instance.new("UICorner")
+hideCorner.CornerRadius = UDim.new(0, 10)
+hideCorner.Parent = hideButton
+
+--========================================================
+-- СЛАЙДЕР
+--========================================================
+
+local function createSlider(
+	parent,
+	name,
+	y,
+	minValue,
+	maxValue,
+	defaultValue
+)
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -100, 0, 25)
+	label.Position = UDim2.new(0, 15, 0, y)
+
+	label.BackgroundTransparency = 1
+	label.Text = name
+	label.TextColor3 = Color3.fromRGB(210, 220, 235)
+	label.TextSize = 14
+	label.Font = Enum.Font.Gotham
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = parent
+
+	local valueLabel = Instance.new("TextLabel")
+	valueLabel.Size = UDim2.new(0, 70, 0, 25)
+	valueLabel.Position = UDim2.new(1, -85, 0, y)
+
+	valueLabel.BackgroundTransparency = 1
+	valueLabel.TextColor3 = Color3.fromRGB(150, 190, 230)
+	valueLabel.TextSize = 13
+	valueLabel.Font = Enum.Font.Gotham
+	valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+	valueLabel.Parent = parent
+
+	local bar = Instance.new("Frame")
+	bar.Size = UDim2.new(1, -30, 0, 8)
+	bar.Position = UDim2.new(0, 15, 0, y + 30)
+
+	bar.BackgroundColor3 = Color3.fromRGB(50, 60, 78)
+	bar.BorderSizePixel = 0
+	bar.Parent = parent
+
+	local barCorner = Instance.new("UICorner")
+	barCorner.CornerRadius = UDim.new(1, 0)
+	barCorner.Parent = bar
+
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.new(
+		(defaultValue - minValue) / (maxValue - minValue),
+		0,
+		1,
+		0
+	)
+
+	fill.BackgroundColor3 = Color3.fromRGB(120, 180, 240)
+	fill.BorderSizePixel = 0
+	fill.Parent = bar
+
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(1, 0)
+	fillCorner.Parent = fill
+
+	local knob = Instance.new("TextButton")
+	knob.Size = UDim2.new(0, 16, 0, 16)
+
+	knob.Position = UDim2.new(
+		(defaultValue - minValue) / (maxValue - minValue),
+		-8,
+		0.5,
+		-8
+	)
+
+	knob.BackgroundColor3 = Color3.fromRGB(235, 245, 255)
+	knob.Text = ""
+	knob.BorderSizePixel = 0
+	knob.Parent = bar
+
+	local knobCorner = Instance.new("UICorner")
+	knobCorner.CornerRadius = UDim.new(1, 0)
+	knobCorner.Parent = knob
+
+	local currentValue = defaultValue
+
+	local function setValueFromX(x)
+
+		local relative =
+			math.clamp(
+				(x - bar.AbsolutePosition.X)
+					/ bar.AbsoluteSize.X,
+				0,
+				1
+			)
+
+		currentValue =
+			minValue
+			+ (maxValue - minValue) * relative
+
+		fill.Size =
+			UDim2.new(relative, 0, 1, 0)
+
+		knob.Position =
+			UDim2.new(relative, -8, 0.5, -8)
+
+		if maxValue <= 10 then
+
+			valueLabel.Text =
+				string.format("%.2f", currentValue)
+
+		else
+
+			valueLabel.Text =
+				tostring(math.floor(currentValue))
+
+		end
+	end
+
+	knob.InputBegan:Connect(function(input)
+
+		if
+			input.UserInputType
+				== Enum.UserInputType.MouseButton1
+			or
+			input.UserInputType
+				== Enum.UserInputType.Touch
+		then
+
+			local moveConnection
+
+			moveConnection =
+				UserInputService.InputChanged:Connect(function(moveInput)
+
+					if
+						moveInput.UserInputType
+							== Enum.UserInputType.MouseMovement
+						or
+						moveInput.UserInputType
+							== Enum.UserInputType.Touch
+					then
+
+						setValueFromX(moveInput.Position.X)
+
+					end
+
+				end)
+
+			local releaseConnection
+
+			releaseConnection =
+				UserInputService.InputEnded:Connect(function(endInput)
+
+					if
+						endInput.UserInputType
+							== Enum.UserInputType.MouseButton1
+						or
+						endInput.UserInputType
+							== Enum.UserInputType.Touch
+					then
+
+						if moveConnection then
+							moveConnection:Disconnect()
+						end
+
+						if releaseConnection then
+							releaseConnection:Disconnect()
+						end
+
+					end
+
+				end)
+
+		end
+
+	end)
+
+	setValueFromX(
+		bar.AbsolutePosition.X
+		+
+		bar.AbsoluteSize.X
+			* ((defaultValue - minValue)
+				/ (maxValue - minValue))
+	)
+
+	return function()
+		return currentValue
+	end
+end
+
+-----------------------------------------------------------
+-- СЛАЙДЕРЫ
+-----------------------------------------------------------
+
+local getGroundDelay = createSlider(
+	main,
+	"Снег на земле",
+	60,
+	0.03,
+	0.5,
+	DEFAULT_GROUND_DELAY
+)
+
+local getParticleRate = createSlider(
+	main,
+	"Снежинки",
+	125,
+	100,
+	1500,
+	DEFAULT_PARTICLE_RATE
+)
+
+local getSnowRadiusScale = createSlider(
+	main,
+	"Радиус снега",
+	190,
+	0.5,
+	5,
+	1
+)
+--========================================================
+-- ПЕРЕМЕЩЕНИЕ ОКНА
+--========================================================
+
+local dragging = false
+local dragStart
+local startPosition
+
+title.InputBegan:Connect(function(input)
+
+	if
+		input.UserInputType
+			== Enum.UserInputType.MouseButton1
+		or
+		input.UserInputType
+			== Enum.UserInputType.Touch
+	then
+
+		dragging = true
+
+		dragStart = input.Position
+
+		startPosition = main.Position
+
+	end
+
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+
+	if not dragging then
+		return
+	end
+
+	if
+		input.UserInputType
+			== Enum.UserInputType.MouseMovement
+		or
+		input.UserInputType
+			== Enum.UserInputType.Touch
+	then
+
+		local delta =
+			input.Position - dragStart
+
+		main.Position =
+			UDim2.new(
+				startPosition.X.Scale,
+				startPosition.X.Offset + delta.X,
+
+				startPosition.Y.Scale,
+				startPosition.Y.Offset + delta.Y
+			)
+
+	end
+
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+
+	if
+		input.UserInputType
+			== Enum.UserInputType.MouseButton1
+		or
+		input.UserInputType
+			== Enum.UserInputType.Touch
+	then
+
+		dragging = false
+
+	end
+
+end)
+
+--========================================================
+-- МАЛЕНЬКАЯ КНОПКА
+--========================================================
+
+local miniButton = Instance.new("TextButton")
+
+miniButton.Size = UDim2.new(0, 50, 0, 50)
+miniButton.Position = UDim2.new(0, 20, 0.5, -25)
+
+miniButton.BackgroundColor3 =
+	Color3.fromRGB(25, 32, 45)
+
+miniButton.Text = "❄"
+miniButton.TextColor3 =
+	Color3.fromRGB(230, 245, 255)
+
+miniButton.TextSize = 25
+miniButton.Font = Enum.Font.GothamBold
+miniButton.BorderSizePixel = 0
+miniButton.Visible = false
+miniButton.Parent = gui
+
+local miniCorner = Instance.new("UICorner")
+miniCorner.CornerRadius = UDim.new(0, 15)
+miniCorner.Parent = miniButton
+
+hideButton.MouseButton1Click:Connect(function()
+
+	main.Visible = false
+	miniButton.Visible = true
+
+end)
+
+miniButton.MouseButton1Click:Connect(function()
+
+	main.Visible = true
+	miniButton.Visible = false
+
+end)
+
+--========================================================
+-- ❄️ СФЕРА СПАВНА СНЕЖИНОК
+--========================================================
+
+-- Внутри этого радиуса снежинок НЕТ
+local SNOW_MIN_RADIUS = 36
+
+-- До этого расстояния от камеры снежинки могут появляться
+local SNOW_MAX_RADIUS = 450
+
+-- Высота/размер области спавна
+local SNOW_SPAWN_HEIGHT = 80
+
+
+-- Невидимый Part, на котором работает ParticleEmitter
+local snowEmitterPart = Instance.new("Part")
+
+snowEmitterPart.Name = "SnowSphere"
+
+snowEmitterPart.Size = Vector3.new(
+	SNOW_MAX_RADIUS * 2,
+	SNOW_SPAWN_HEIGHT * 2,
+	SNOW_MAX_RADIUS * 2
+)
 
 snowEmitterPart.Anchored = true
 snowEmitterPart.CanCollide = false
@@ -69,54 +492,116 @@ snowEmitterPart.CanTouch = false
 snowEmitterPart.CanQuery = false
 snowEmitterPart.Transparency = 1
 
-snowEmitterPart.Size =
-	Vector3.new(
-		SNOW_RADIUS * 2,
-		1,
-		SNOW_RADIUS * 2
-	)
+snowEmitterPart.Parent = emitterFolder
 
-snowEmitterPart.Parent =
-	snowFolder
 
-local attachment =
-	Instance.new("Attachment")
+local attachment = Instance.new("Attachment")
+attachment.Parent = snowEmitterPart
 
-attachment.Parent =
-	snowEmitterPart
 
-local emitter =
-	Instance.new("ParticleEmitter")
+local emitter = Instance.new("ParticleEmitter")
+emitter.Parent = attachment
 
-emitter.Name =
-	"Snowfall"
 
-emitter.Parent =
-	attachment
+--========================================================
+-- НАСТРОЙКИ
+--========================================================
 
-emitter.Texture =
-	"rbxassetid://9125712667"
+emitter.Rate = 0
 
--- Начинаем с небольшого количества
-emitter.Rate = 20
+emitter.Lifetime = NumberRange.new(4, 7)
+
+emitter.Speed = NumberRange.new(7, 12)
+
+emitter.Acceleration = Vector3.new(
+	0,
+	-5,
+	0
+)
+
+emitter.Drag = 0
+
+emitter.SpreadAngle = Vector2.new(180, 180)
+
+emitter.EmissionDirection = Enum.NormalId.Bottom
+
+emitter.Shape = Enum.ParticleEmitterShape.Box
+emitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+emitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+
+emitter.Size = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 0.12),
+	NumberSequenceKeypoint.new(1, 0.08)
+})
+
+emitter.Transparency = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 0.1),
+	NumberSequenceKeypoint.new(1, 0.5)
+})
+
+emitter.Color = ColorSequence.new(
+	Color3.fromRGB(255, 255, 255)
+)
+
+emitter.LightEmission = 0.1
+
+emitter.RotSpeed = NumberRange.new(-40, 40)
+
+
+--========================================================
+-- ПЕРЕМЕЩЕНИЕ ОБЛАСТИ ЗА КАМЕРОЙ
+--========================================================
+
+RunService.RenderStepped:Connect(function()
+
+	if camera then
+
+		snowEmitterPart.Position =
+			camera.CFrame.Position
+
+	end
+
+end)
+
+-----------------------------------------------------------
+-- НАСТРОЙКИ ЧАСТИЦ
+-----------------------------------------------------------
+
+emitter.Rate = 0
 
 emitter.Lifetime =
 	NumberRange.new(4, 7)
 
 emitter.Speed =
-	NumberRange.new(
-		SNOW_SPEED * 0.7,
-		SNOW_SPEED * 1.3
-	)
+	NumberRange.new(7, 12)
+
+emitter.Acceleration =
+	Vector3.new(0, -5, 0)
+
+emitter.Drag = 0
+
+emitter.EmissionDirection =
+	Enum.NormalId.Bottom
 
 emitter.SpreadAngle =
 	Vector2.new(180, 180)
 
+-- Объёмная область появления
+emitter.Shape =
+	Enum.ParticleEmitterShape.Box
+
+emitter.ShapeStyle =
+	Enum.ParticleEmitterShapeStyle.Volume
+
+emitter.ShapeInOut =
+	Enum.ParticleEmitterShapeInOut.Outward
+
+-- Размер
 emitter.Size =
 	NumberSequence.new({
 		NumberSequenceKeypoint.new(
 			0,
-			0.08
+			0.12
 		),
 
 		NumberSequenceKeypoint.new(
@@ -125,69 +610,109 @@ emitter.Size =
 		)
 	})
 
-emitter.Color =
-	ColorSequence.new(
-		SNOW_COLOR
-	)
-
+-- Прозрачность
 emitter.Transparency =
 	NumberSequence.new({
 		NumberSequenceKeypoint.new(
 			0,
-			0.05
-		),
-
-		NumberSequenceKeypoint.new(
-			0.8,
 			0.1
 		),
 
 		NumberSequenceKeypoint.new(
 			1,
-			0.4
+			0.5
 		)
 	})
 
-emitter.Rotation =
-	NumberRange.new(0, 360)
+emitter.Color =
+	ColorSequence.new(
+		Color3.fromRGB(
+			255,
+			255,
+			255
+		)
+	)
+
+emitter.LightEmission = 0.1
 
 emitter.RotSpeed =
-	NumberRange.new(-80, 80)
+	NumberRange.new(-40, 40)
 
-emitter.Acceleration =
-	Vector3.new(2, -1, 0)
+-- ВАЖНО:
+-- Texture НЕ задаём.
+-- Поэтому никакого Wow Obby изображения
+-- здесь не будет.
 
---==================================================
--- ПЛАВНЫЙ ЗАПУСК СНЕГОПАДА
---==================================================
+--========================================================
+-- ДВИЖЕНИЕ СНЕЖНОГО ОБЪЁМА
+--========================================================
+
+RunService.RenderStepped:Connect(function()
+
+	if camera and snowEmitterPart then
+
+		snowEmitterPart.Position =
+			camera.CFrame.Position
+
+	end
+
+end)
+
+--========================================================
+-- ПЛАВНЫЙ ЗАПУСК СНЕГА
+--========================================================
 
 task.spawn(function()
 
-	local currentRate = 20
+	task.wait(1.5)
 
-	while currentRate <
-		PARTICLE_RATE do
+	local currentRate = 0
 
-		-- Увеличиваем постепенно
+	while currentRate < getParticleRate() do
+
 		currentRate += 20
 
 		if currentRate >
-			PARTICLE_RATE then
+			getParticleRate()
+		then
 
 			currentRate =
-				PARTICLE_RATE
+				getParticleRate()
+
 		end
 
 		emitter.Rate =
 			currentRate
 
-		task.wait(0.15)
+		task.wait(0.1)
+
 	end
+
 end)
 
---==================================================
--- СОЗДАНИЕ СНЕЖНОГО PART
---==================================================
+--========================================================
+-- ОБНОВЛЕНИЕ КОЛИЧЕСТВА СНЕЖИНОК
+--========================================================
+
+task.spawn(function()
+
+	while true do
+
+		emitter.Rate =
+			getParticleRate()
+
+		task.wait(0.2)
+
+	end
+
+end)
+
+--========================================================
+-- ❄️ СНЕГ НА ЗЕМЛЕ
+--========================================================
+
+local rayParams =
+	RaycastParams.new()
 
 local function createSnowPart(
 	position,
@@ -197,136 +722,123 @@ local function createSnowPart(
 	local snow =
 		Instance.new("Part")
 
-	snow.Name =
-		"Snow"
+	snow.Name = "Snow"
+
+	snow.Size =
+		Vector3.new(
+			math.random(
+				MIN_SNOW_SIZE,
+				MAX_SNOW_SIZE
+			),
+
+			0.12,
+
+			math.random(
+				MIN_SNOW_SIZE,
+				MAX_SNOW_SIZE
+			)
+		)
 
 	snow.Anchored = true
 
-	snow.CanCollide =
-		false
-
-	snow.CanTouch =
-		false
-
-	snow.CanQuery =
-		false
+	snow.CanCollide = false
+	snow.CanTouch = false
+	snow.CanQuery = false
 
 	snow.Material =
 		Enum.Material.Snow
 
 	snow.Color =
-		SNOW_COLOR
-
-	snow.Transparency =
-		0.05
-
-	snow.Size =
-		Vector3.new(
-			GROUND_SIZE,
-			GROUND_THICKNESS,
-			GROUND_SIZE
+		Color3.fromRGB(
+			235,
+			240,
+			245
 		)
 
-	snow.Position =
-		position +
-		normal *
-		(GROUND_THICKNESS / 2)
+	snow.Transparency = 0.05
+
+	snow.CFrame =
+		CFrame.new(
+			position
+				+ normal * 0.06
+		)
 
 	snow.Parent =
 		groundFolder
+
 end
 
---==================================================
--- СЛЕДИМ ЗА КАМЕРОЙ
---==================================================
-
-RunService.RenderStepped:Connect(function()
-
-	camera =
-		Workspace.CurrentCamera
-
-	if camera then
-
-		snowEmitterPart.Position =
-			camera.CFrame.Position +
-			Vector3.new(
-				0,
-				SNOW_HEIGHT,
-				0
-			)
-
-	end
-end)
-
---==================================================
--- ГЕНЕРАЦИЯ СНЕГА НА ЗЕМЛЕ
---==================================================
+--========================================================
+-- ПОСТЕПЕННОЕ ПОЯВЛЕНИЕ СНЕГА НА ЗЕМЛЕ
+--========================================================
 
 task.spawn(function()
 
+	task.wait(2)
+
 	while true do
 
-		camera =
-			Workspace.CurrentCamera
+		local character =
+			player.Character
 
-		if camera then
+		if character then
 
-			for i = 1,
-				PARTS_PER_BATCH do
+			rayParams.FilterType =
+				Enum.RaycastFilterType.Exclude
 
-				-- Проверяем лимит
-				if #groundFolder:GetChildren()
-					>= MAX_SNOW_PARTS then
-
-					break
-				end
-
-				local cameraPos =
-					camera.CFrame.Position
-
-				local randomOffset =
-					Vector3.new(
-						math.random(
-							-SNOW_RADIUS,
-							SNOW_RADIUS
-						),
-
-						60,
-
-						math.random(
-							-SNOW_RADIUS,
-							SNOW_RADIUS
-						)
-					)
-
-				local rayOrigin =
-					cameraPos +
-					randomOffset
-
-				local params =
-					RaycastParams.new()
-
-				params.FilterType =
-					Enum.RaycastFilterType.Exclude
-
-				params.FilterDescendantsInstances = {
-					player.Character,
+			rayParams.FilterDescendantsInstances =
+				{
+					character,
 					snowFolder
 				}
 
-				local result =
-					Workspace:Raycast(
-						rayOrigin,
-						Vector3.new(
-							0,
-							-150,
-							0
-						),
-						params
+			-- Ищем случайную точку
+			-- в большом радиусе вокруг камеры
+
+			local randomX =
+				math.random(
+					-SNOW_RADIUS,
+					SNOW_RADIUS
+				)
+
+			local randomZ =
+				math.random(
+					-SNOW_RADIUS,
+					SNOW_RADIUS
+				)
+
+			-- Проверяем, что точка находится
+			-- внутри круга по X/Z
+
+			if
+				randomX * randomX
+				+
+				randomZ * randomZ
+				<=
+				SNOW_RADIUS * SNOW_RADIUS
+			then
+
+				local origin =
+					camera.CFrame.Position
+					+
+					Vector3.new(
+						randomX,
+						SNOW_HEIGHT,
+						randomZ
 					)
 
-				if result and
-					result.Normal.Y > 0.7 then
+				local result =
+					workspace:Raycast(
+						origin,
+						Vector3.new(
+							0,
+							-SNOW_HEIGHT * 2,
+							0
+						),
+						rayParams
+					)
+
+				if result then
 
 					createSnowPart(
 						result.Position,
@@ -336,972 +848,13 @@ task.spawn(function()
 				end
 
 			end
+
 		end
 
 		task.wait(
-			GROUND_SPAWN_DELAY
+			getGroundDelay()
 		)
 
-		task.wait(
-			BATCH_DELAY
-		)
-	end
-end)
-
---==================================================
--- GUI
---==================================================
-
-local gui =
-	Instance.new("ScreenGui")
-
-gui.Name =
-	"SnowControl"
-
-gui.ResetOnSpawn =
-	false
-
-gui.IgnoreGuiInset =
-	true
-
-gui.Parent =
-	player:WaitForChild(
-		"PlayerGui"
-	)
-
---==================================================
--- МАЛЕНЬКАЯ КНОПКА
---==================================================
-
-local miniButton =
-	Instance.new("TextButton")
-
-miniButton.Name =
-	"SnowMiniButton"
-
-miniButton.Size =
-	UDim2.fromOffset(
-		52,
-		52
-	)
-
-miniButton.Position =
-	UDim2.new(
-		0,
-		25,
-		0.5,
-		-26
-	)
-
-miniButton.BackgroundColor3 =
-	Color3.fromRGB(
-		24,
-		30,
-		42
-	)
-
-miniButton.Text =
-	"❄"
-
-miniButton.TextColor3 =
-	Color3.fromRGB(
-		220,
-		240,
-		255
-	)
-
-miniButton.TextSize =
-	25
-
-miniButton.Font =
-	Enum.Font.GothamBold
-
-miniButton.Visible =
-	false
-
-miniButton.Parent =
-	gui
-
-local miniCorner =
-	Instance.new("UICorner")
-
-miniCorner.CornerRadius =
-	UDim.new(
-		0,
-		16
-	)
-
-miniCorner.Parent =
-	miniButton
-
-local miniStroke =
-	Instance.new("UIStroke")
-
-miniStroke.Color =
-	Color3.fromRGB(
-		130,
-		200,
-		255
-	)
-
-miniStroke.Transparency =
-	0.25
-
-miniStroke.Thickness =
-	1.5
-
-miniStroke.Parent =
-	miniButton
-
---==================================================
--- ОКНО
---==================================================
-
-local window =
-	Instance.new("Frame")
-
-window.Name =
-	"SnowWindow"
-
-window.Size =
-	UDim2.fromOffset(
-		360,
-		285
-	)
-
-window.Position =
-	UDim2.new(
-		0,
-		25,
-		0.5,
-		-142
-	)
-
-window.BackgroundColor3 =
-	Color3.fromRGB(
-		18,
-		22,
-		32
-	)
-
-window.BorderSizePixel =
-	0
-
-window.Parent =
-	gui
-
-local windowCorner =
-	Instance.new("UICorner")
-
-windowCorner.CornerRadius =
-	UDim.new(
-		0,
-		16
-	)
-
-windowCorner.Parent =
-	window
-
-local windowStroke =
-	Instance.new("UIStroke")
-
-windowStroke.Color =
-	Color3.fromRGB(
-		90,
-		150,
-		200
-	)
-
-windowStroke.Transparency =
-	0.35
-
-windowStroke.Parent =
-	window
-
---==================================================
--- ШАПКА
---==================================================
-
-local top =
-	Instance.new("Frame")
-
-top.Size =
-	UDim2.new(
-		1,
-		0,
-		0,
-		58
-	)
-
-top.BackgroundColor3 =
-	Color3.fromRGB(
-		25,
-		32,
-		46
-	)
-
-top.BorderSizePixel =
-	0
-
-top.Parent =
-	window
-
-local topCorner =
-	Instance.new("UICorner")
-
-topCorner.CornerRadius =
-	UDim.new(
-		0,
-		16
-	)
-
-topCorner.Parent =
-	top
-
-local icon =
-	Instance.new("TextLabel")
-
-icon.Size =
-	UDim2.fromOffset(
-		42,
-		42
-	)
-
-icon.Position =
-	UDim2.fromOffset(
-		10,
-		8
-	)
-
-icon.BackgroundColor3 =
-	Color3.fromRGB(
-		70,
-		120,
-		170
-	)
-
-icon.Text =
-	"❄"
-
-icon.TextColor3 =
-	Color3.fromRGB(
-		235,
-		250,
-		255
-	)
-
-icon.TextSize =
-	21
-
-icon.Font =
-	Enum.Font.GothamBold
-
-icon.Parent =
-	top
-
-local iconCorner =
-	Instance.new("UICorner")
-
-iconCorner.CornerRadius =
-	UDim.new(
-		0,
-		12
-	)
-
-iconCorner.Parent =
-	icon
-
-local title =
-	Instance.new("TextLabel")
-
-title.Size =
-	UDim2.new(
-		1,
-		-125,
-		0,
-		25
-	)
-
-title.Position =
-	UDim2.fromOffset(
-		62,
-		9
-	)
-
-title.BackgroundTransparency =
-	1
-
-title.Text =
-	"Snow Controller"
-
-title.TextColor3 =
-	Color3.fromRGB(
-		245,
-		250,
-		255
-	)
-
-title.TextSize =
-	17
-
-title.Font =
-	Enum.Font.GothamBold
-
-title.TextXAlignment =
-	Enum.TextXAlignment.Left
-
-title.Parent =
-	top
-
-local subtitle =
-	Instance.new("TextLabel")
-
-subtitle.Size =
-	UDim2.new(
-		1,
-		-125,
-		0,
-		18
-	)
-
-subtitle.Position =
-	UDim2.fromOffset(
-		62,
-		32
-	)
-
-subtitle.BackgroundTransparency =
-	1
-
-subtitle.Text =
-	"Настройки снегопада"
-
-subtitle.TextColor3 =
-	Color3.fromRGB(
-		135,
-		150,
-		170
-	)
-
-subtitle.TextSize =
-	11
-
-subtitle.Font =
-	Enum.Font.Gotham
-
-subtitle.TextXAlignment =
-	Enum.TextXAlignment.Left
-
-subtitle.Parent =
-	top
-
---==================================================
--- КНОПКА СКРЫТИЯ
---==================================================
-
-local hideButton =
-	Instance.new("TextButton")
-
-hideButton.Size =
-	UDim2.fromOffset(
-		36,
-		36
-	)
-
-hideButton.Position =
-	UDim2.new(
-		1,
-		-45,
-		0,
-		11
-	)
-
-hideButton.BackgroundColor3 =
-	Color3.fromRGB(
-		45,
-		55,
-		72
-	)
-
-hideButton.Text =
-	"−"
-
-hideButton.TextColor3 =
-	Color3.fromRGB(
-		220,
-		230,
-		240
-	)
-
-hideButton.TextSize =
-	22
-
-hideButton.Font =
-	Enum.Font.GothamBold
-
-hideButton.Parent =
-	top
-
-local hideCorner =
-	Instance.new("UICorner")
-
-hideCorner.CornerRadius =
-	UDim.new(
-		0,
-		10
-	)
-
-hideCorner.Parent =
-	hideButton
-
---==================================================
--- КОНТЕНТ
---==================================================
-
-local content =
-	Instance.new("Frame")
-
-content.Size =
-	UDim2.new(
-		1,
-		-30,
-		1,
-		-75
-	)
-
-content.Position =
-	UDim2.fromOffset(
-		15,
-		68
-	)
-
-content.BackgroundTransparency =
-	1
-
-content.Parent =
-	window
-
---==================================================
--- ПОЛЗУНОК
---==================================================
-
-local function createSlider(
-	name,
-	description,
-	y,
-	minValue,
-	maxValue,
-	defaultValue,
-	callback,
-	formatValue
-)
-
-	local label =
-		Instance.new("TextLabel")
-
-	label.Size =
-		UDim2.new(
-			1,
-			-100,
-			0,
-			22
-		)
-
-	label.Position =
-		UDim2.fromOffset(
-			5,
-			y
-		)
-
-	label.BackgroundTransparency =
-		1
-
-	label.Text =
-		name
-
-	label.TextColor3 =
-		Color3.fromRGB(
-			235,
-			240,
-			248
-		)
-
-	label.TextSize =
-		13
-
-	label.Font =
-		Enum.Font.GothamBold
-
-	label.TextXAlignment =
-		Enum.TextXAlignment.Left
-
-	label.Parent =
-		content
-
-	local valueLabel =
-		Instance.new("TextLabel")
-
-	valueLabel.Size =
-		UDim2.fromOffset(
-			95,
-			22
-		)
-
-	valueLabel.Position =
-		UDim2.new(
-			1,
-			-100,
-			0,
-			y
-		)
-
-	valueLabel.BackgroundTransparency =
-		1
-
-	valueLabel.TextColor3 =
-		Color3.fromRGB(
-			135,
-			205,
-			255
-		)
-
-	valueLabel.TextSize =
-		12
-
-	valueLabel.Font =
-		Enum.Font.GothamBold
-
-	valueLabel.TextXAlignment =
-		Enum.TextXAlignment.Right
-
-	valueLabel.Parent =
-		content
-
-	local desc =
-		Instance.new("TextLabel")
-
-	desc.Size =
-		UDim2.new(
-			1,
-			0,
-			0,
-			17
-		)
-
-	desc.Position =
-		UDim2.fromOffset(
-			5,
-			y + 20
-		)
-
-	desc.BackgroundTransparency =
-		1
-
-	desc.Text =
-		description
-
-	desc.TextColor3 =
-		Color3.fromRGB(
-			120,
-			135,
-			155
-		)
-
-	desc.TextSize =
-		10
-
-	desc.Font =
-		Enum.Font.Gotham
-
-	desc.TextXAlignment =
-		Enum.TextXAlignment.Left
-
-	desc.Parent =
-		content
-
-	local bar =
-		Instance.new("Frame")
-
-	bar.Size =
-		UDim2.new(
-			1,
-			-10,
-			0,
-			7
-		)
-
-	bar.Position =
-		UDim2.fromOffset(
-			5,
-			y + 48
-		)
-
-	bar.BackgroundColor3 =
-		Color3.fromRGB(
-			48,
-			56,
-			70
-		)
-
-	bar.BorderSizePixel =
-		0
-
-	bar.Parent =
-		content
-
-	local barCorner =
-		Instance.new("UICorner")
-
-	barCorner.CornerRadius =
-		UDim.new(
-			1,
-			0
-		)
-
-	barCorner.Parent =
-		bar
-
-	local percent =
-		(defaultValue - minValue) /
-		(maxValue - minValue)
-
-	local fill =
-		Instance.new("Frame")
-
-	fill.Size =
-		UDim2.fromScale(
-			percent,
-			1
-		)
-
-	fill.BackgroundColor3 =
-		Color3.fromRGB(
-			100,
-			180,
-			245
-		)
-
-	fill.BorderSizePixel =
-		0
-
-	fill.Parent =
-		bar
-
-	local fillCorner =
-		Instance.new("UICorner")
-
-	fillCorner.CornerRadius =
-		UDim.new(
-			1,
-			0
-		)
-
-	fillCorner.Parent =
-		fill
-
-	local knob =
-		Instance.new("TextButton")
-
-	knob.Size =
-		UDim2.fromOffset(
-			17,
-			17
-		)
-
-	knob.AnchorPoint =
-		Vector2.new(
-			0.5,
-			0.5
-		)
-
-	knob.Position =
-		UDim2.new(
-			percent,
-			0,
-			0.5,
-			0
-		)
-
-	knob.BackgroundColor3 =
-		Color3.fromRGB(
-			235,
-			248,
-			255
-		)
-
-	knob.BorderSizePixel =
-		0
-
-	knob.Text =
-		""
-
-	knob.Parent =
-		bar
-
-	local knobCorner =
-		Instance.new("UICorner")
-
-	knobCorner.CornerRadius =
-		UDim.new(
-			1,
-			0
-		)
-
-	knobCorner.Parent =
-		knob
-
-	local dragging =
-		false
-
-	local function update(x)
-
-		local p =
-			(x - bar.AbsolutePosition.X) /
-			bar.AbsoluteSize.X
-
-		p =
-			math.clamp(
-				p,
-				0,
-				1
-			)
-
-		local value =
-			minValue +
-			(maxValue - minValue) *
-			p
-
-		if maxValue -
-			minValue >= 100 then
-
-			value =
-				math.round(value)
-
-		else
-
-			value =
-				math.round(
-					value * 100
-				) / 100
-
-		end
-
-		local newP =
-			(value - minValue) /
-			(maxValue - minValue)
-
-		fill.Size =
-			UDim2.fromScale(
-				newP,
-				1
-			)
-
-		knob.Position =
-			UDim2.new(
-				newP,
-				0,
-				0.5,
-				0
-			)
-
-		valueLabel.Text =
-			formatValue(value)
-
-		callback(value)
 	end
 
-	knob.MouseButton1Down:Connect(function()
-		dragging = true
-	end)
-
-	bar.InputBegan:Connect(function(input)
-
-		if input.UserInputType ==
-			Enum.UserInputType.MouseButton1 then
-
-			dragging = true
-
-			update(
-				input.Position.X
-			)
-		end
-	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-
-		if dragging and
-			input.UserInputType ==
-			Enum.UserInputType.MouseMovement then
-
-			update(
-				input.Position.X
-			)
-		end
-	end)
-
-	UserInputService.InputEnded:Connect(function(input)
-
-		if input.UserInputType ==
-			Enum.UserInputType.MouseButton1 then
-
-			dragging = false
-		end
-	end)
-
-	valueLabel.Text =
-		formatValue(
-			defaultValue
-		)
-end
-
---==================================================
--- ПОЛЗУНКИ
---==================================================
-
-createSlider(
-	"Снег на земле",
-	"Частота создания снежного покрытия",
-	5,
-	0.03,
-	0.5,
-	0.08,
-
-	function(value)
-		GROUND_SPAWN_DELAY = value
-	end,
-
-	function(value)
-		return string.format(
-			"%.2f сек",
-			value
-		)
-	end
-)
-
-createSlider(
-	"Снежинки",
-	"Плотность частиц в воздухе",
-	82,
-	100,
-	1500,
-	400,
-
-	function(value)
-
-		PARTICLE_RATE =
-			value
-
-		emitter.Rate =
-			value
-	end,
-
-	function(value)
-		return tostring(
-			math.round(value)
-		)
-	end
-)
-
---==================================================
--- DRAG
---==================================================
-
-local function makeDraggable(
-	object,
-	handle
-)
-
-	local dragging =
-		false
-
-	local dragStart
-	local startPosition
-
-	handle.InputBegan:Connect(function(input)
-
-		if input.UserInputType ==
-			Enum.UserInputType.MouseButton1 then
-
-			dragging =
-				true
-
-			dragStart =
-				input.Position
-
-			startPosition =
-				object.Position
-		end
-	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-
-		if dragging and
-			input.UserInputType ==
-			Enum.UserInputType.MouseMovement then
-
-			local delta =
-				input.Position -
-				dragStart
-
-			object.Position =
-				UDim2.new(
-					startPosition.X.Scale,
-					startPosition.X.Offset +
-						delta.X,
-
-					startPosition.Y.Scale,
-					startPosition.Y.Offset +
-						delta.Y
-				)
-		end
-	end)
-
-	UserInputService.InputEnded:Connect(function(input)
-
-		if input.UserInputType ==
-			Enum.UserInputType.MouseButton1 then
-
-			dragging =
-				false
-		end
-	end)
-end
-
-makeDraggable(
-	window,
-	top
-)
-
-makeDraggable(
-	miniButton,
-	miniButton
-)
-
---==================================================
--- СКРЫТЬ
---==================================================
-
-hideButton.MouseButton1Click:Connect(function()
-
-	window.Visible =
-		false
-
-	miniButton.Visible =
-		true
-
-	miniButton.Position =
-		window.Position
-end)
-
---==================================================
--- ПОКАЗАТЬ
---==================================================
-
-miniButton.MouseButton1Click:Connect(function()
-
-	miniButton.Visible =
-		false
-
-	window.Visible =
-		true
 end)
