@@ -462,249 +462,106 @@ miniButton.MouseButton1Click:Connect(function()
 end)
 
 --========================================================
--- ❄️ СФЕРА СПАВНА СНЕЖИНОК
+-- ❄️ СФЕРИЧЕСКАЯ ОБЛАСТЬ СПАВНА СНЕЖИНОК
 --========================================================
 
--- Внутри этого радиуса снежинок НЕТ
-local SNOW_MIN_RADIUS = 36
 
--- До этого расстояния от камеры снежинки могут появляться
-local SNOW_MAX_RADIUS = 450
+--========================================================
+-- ❄️ СФЕРИЧЕСКИЙ СПАВН СНЕЖИНОК
+--========================================================
 
--- Высота/размер области спавна
-local SNOW_SPAWN_HEIGHT = 80
+local BASE_MIN_RADIUS = 36
+local BASE_MAX_RADIUS = 450
 
-
--- Невидимый Part, на котором работает ParticleEmitter
 local snowEmitterPart = Instance.new("Part")
-
 snowEmitterPart.Name = "SnowSphere"
-
-snowEmitterPart.Size = Vector3.new(
-	SNOW_MAX_RADIUS * 2,
-	SNOW_SPAWN_HEIGHT * 2,
-	SNOW_MAX_RADIUS * 2
-)
-
+snowEmitterPart.Size = Vector3.new(1, 1, 1)
 snowEmitterPart.Anchored = true
 snowEmitterPart.CanCollide = false
 snowEmitterPart.CanTouch = false
 snowEmitterPart.CanQuery = false
 snowEmitterPart.Transparency = 1
-
 snowEmitterPart.Parent = emitterFolder
-
 
 local attachment = Instance.new("Attachment")
 attachment.Parent = snowEmitterPart
 
-
 local emitter = Instance.new("ParticleEmitter")
 emitter.Parent = attachment
 
-
---========================================================
--- НАСТРОЙКИ
---========================================================
-
+emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
 emitter.Rate = 0
-
-emitter.Lifetime = NumberRange.new(4, 7)
-
-emitter.Speed = NumberRange.new(7, 12)
-
-emitter.Acceleration = Vector3.new(
-	0,
-	-5,
-	0
-)
-
-emitter.Drag = 0
-
-emitter.SpreadAngle = Vector2.new(180, 180)
-
+emitter.Lifetime = NumberRange.new(4, 5)
+emitter.Speed = NumberRange.new(2, 3)
+emitter.Acceleration = Vector3.new(0, -1, 0)
 emitter.EmissionDirection = Enum.NormalId.Bottom
-
-emitter.Shape = Enum.ParticleEmitterShape.Box
-emitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
-emitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+emitter.SpreadAngle = Vector2.new(0, 0)
+emitter.LockedToPart = false
 
 emitter.Size = NumberSequence.new({
-	NumberSequenceKeypoint.new(0, 0.12),
-	NumberSequenceKeypoint.new(1, 0.08)
+    NumberSequenceKeypoint.new(0, 1.2),
+    NumberSequenceKeypoint.new(1, 0.8)
 })
 
 emitter.Transparency = NumberSequence.new({
-	NumberSequenceKeypoint.new(0, 0.1),
-	NumberSequenceKeypoint.new(1, 0.5)
+    NumberSequenceKeypoint.new(0, 0.1),
+    NumberSequenceKeypoint.new(1, 0.5)
 })
 
-emitter.Color = ColorSequence.new(
-	Color3.fromRGB(255, 255, 255)
-)
-
-emitter.LightEmission = 0.1
-
+emitter.Color = ColorSequence.new(Color3.new(1, 1, 1))
 emitter.RotSpeed = NumberRange.new(-40, 40)
 
+local spawnAccumulator = 0
 
---========================================================
--- ПЕРЕМЕЩЕНИЕ ОБЛАСТИ ЗА КАМЕРОЙ
---========================================================
+local function randomSpherePoint(minRadius, maxRadius)
+    local radius = (
+        minRadius ^ 3
+        + math.random() * (maxRadius ^ 3 - minRadius ^ 3)
+    ) ^ (1 / 3)
 
-RunService.RenderStepped:Connect(function()
+    local vertical = math.random() * 2 - 1
+    local angle = math.random() * math.pi * 2
+    local horizontal = math.sqrt(1 - vertical * vertical)
 
-	if camera then
+    return Vector3.new(
+        radius * horizontal * math.cos(angle),
+        radius * vertical,
+        radius * horizontal * math.sin(angle)
+    )
+end
 
-		snowEmitterPart.Position =
-			camera.CFrame.Position
+RunService.Heartbeat:Connect(function(dt)
+    local currentCamera = workspace.CurrentCamera
+    if not currentCamera then return end
 
-	end
+    local scale = getSnowRadiusScale()
 
-end)
+    local minRadius = BASE_MIN_RADIUS * scale
+    local maxRadius = BASE_MAX_RADIUS * scale
 
------------------------------------------------------------
--- НАСТРОЙКИ ЧАСТИЦ
------------------------------------------------------------
+    -- Запас учитывает движение падающей частицы
+    local safeMinRadius = minRadius + 20
 
-emitter.Rate = 0
+    if safeMinRadius >= maxRadius then
+        safeMinRadius = maxRadius * 0.8
+    end
 
-emitter.Lifetime =
-	NumberRange.new(4, 7)
+    spawnAccumulator += dt * getParticleRate()
 
-emitter.Speed =
-	NumberRange.new(7, 12)
+    local amount = math.min(math.floor(spawnAccumulator), 50)
+    spawnAccumulator -= amount
 
-emitter.Acceleration =
-	Vector3.new(0, -5, 0)
+    for i = 1, amount do
+        local offset = randomSpherePoint(
+            safeMinRadius,
+            maxRadius
+        )
 
-emitter.Drag = 0
+        snowEmitterPart.Position =
+            currentCamera.CFrame.Position + offset
 
-emitter.EmissionDirection =
-	Enum.NormalId.Bottom
-
-emitter.SpreadAngle =
-	Vector2.new(180, 180)
-
--- Объёмная область появления
-emitter.Shape =
-	Enum.ParticleEmitterShape.Box
-
-emitter.ShapeStyle =
-	Enum.ParticleEmitterShapeStyle.Volume
-
-emitter.ShapeInOut =
-	Enum.ParticleEmitterShapeInOut.Outward
-
--- Размер
-emitter.Size =
-	NumberSequence.new({
-		NumberSequenceKeypoint.new(
-			0,
-			0.12
-		),
-
-		NumberSequenceKeypoint.new(
-			1,
-			0.08
-		)
-	})
-
--- Прозрачность
-emitter.Transparency =
-	NumberSequence.new({
-		NumberSequenceKeypoint.new(
-			0,
-			0.1
-		),
-
-		NumberSequenceKeypoint.new(
-			1,
-			0.5
-		)
-	})
-
-emitter.Color =
-	ColorSequence.new(
-		Color3.fromRGB(
-			255,
-			255,
-			255
-		)
-	)
-
-emitter.LightEmission = 0.1
-
-emitter.RotSpeed =
-	NumberRange.new(-40, 40)
-
--- ВАЖНО:
--- Texture НЕ задаём.
--- Поэтому никакого Wow Obby изображения
--- здесь не будет.
-
---========================================================
--- ДВИЖЕНИЕ СНЕЖНОГО ОБЪЁМА
---========================================================
-
-RunService.RenderStepped:Connect(function()
-
-	if camera and snowEmitterPart then
-
-		snowEmitterPart.Position =
-			camera.CFrame.Position
-
-	end
-
-end)
-
---========================================================
--- ПЛАВНЫЙ ЗАПУСК СНЕГА
---========================================================
-
-task.spawn(function()
-
-	task.wait(1.5)
-
-	local currentRate = 0
-
-	while currentRate < getParticleRate() do
-
-		currentRate += 20
-
-		if currentRate >
-			getParticleRate()
-		then
-
-			currentRate =
-				getParticleRate()
-
-		end
-
-		emitter.Rate =
-			currentRate
-
-		task.wait(0.1)
-
-	end
-
-end)
-
---========================================================
--- ОБНОВЛЕНИЕ КОЛИЧЕСТВА СНЕЖИНОК
---========================================================
-
-task.spawn(function()
-
-	while true do
-
-		emitter.Rate =
-			getParticleRate()
-
-		task.wait(0.2)
-
-	end
-
+        emitter:Emit(1)
+    end
 end)
 
 --========================================================
@@ -772,89 +629,88 @@ end
 -- ПОСТЕПЕННОЕ ПОЯВЛЕНИЕ СНЕГА НА ЗЕМЛЕ
 --========================================================
 
+--========================================================
+-- ❄️ СНЕГ ТОЛЬКО НА СТАТИЧНЫХ ПОВЕРХНОСТЯХ
+--========================================================
+
 task.spawn(function()
+    task.wait(2)
 
-	task.wait(2)
+    while true do
+        local character = player.Character
+        local currentCamera = workspace.CurrentCamera
 
-	while true do
+        if character and currentCamera then
+            local randomX = math.random(-SNOW_RADIUS, SNOW_RADIUS)
+            local randomZ = math.random(-SNOW_RADIUS, SNOW_RADIUS)
 
-		local character =
-			player.Character
+            if randomX * randomX + randomZ * randomZ
+                <= SNOW_RADIUS * SNOW_RADIUS then
 
-		if character then
+                local origin =
+                    currentCamera.CFrame.Position
+                    + Vector3.new(randomX, SNOW_HEIGHT, randomZ)
 
-			rayParams.FilterType =
-				Enum.RaycastFilterType.Exclude
+                local direction = Vector3.new(
+                    0,
+                    -SNOW_HEIGHT * 2,
+                    0
+                )
 
-			rayParams.FilterDescendantsInstances =
-				{
-					character,
-					snowFolder
-				}
+                local excluded = {
+                    character,
+                    snowFolder
+                }
 
-			-- Ищем случайную точку
-			-- в большом радиусе вокруг камеры
+                local result = nil
 
-			local randomX =
-				math.random(
-					-SNOW_RADIUS,
-					SNOW_RADIUS
-				)
+                -- Пропускаем движущиеся объекты и стены
+                for attempt = 1, 12 do
+                    rayParams.FilterType =
+                        Enum.RaycastFilterType.Exclude
 
-			local randomZ =
-				math.random(
-					-SNOW_RADIUS,
-					SNOW_RADIUS
-				)
+                    rayParams.FilterDescendantsInstances =
+                        excluded
 
-			-- Проверяем, что точка находится
-			-- внутри круга по X/Z
+                    result = workspace:Raycast(
+                        origin,
+                        direction,
+                        rayParams
+                    )
 
-			if
-				randomX * randomX
-				+
-				randomZ * randomZ
-				<=
-				SNOW_RADIUS * SNOW_RADIUS
-			then
+                    if not result then
+                        break
+                    end
 
-				local origin =
-					camera.CFrame.Position
-					+
-					Vector3.new(
-						randomX,
-						SNOW_HEIGHT,
-						randomZ
-					)
+                    local hit = result.Instance
 
-				local result =
-					workspace:Raycast(
-						origin,
-						Vector3.new(
-							0,
-							-SNOW_HEIGHT * 2,
-							0
-						),
-						rayParams
-					)
+                    local isStatic =
+                        hit == workspace.Terrain
+                        or (
+                            hit:IsA("BasePart")
+                            and hit.Anchored
+                        )
 
-				if result then
+                    local isFloor =
+                        result.Normal.Y >= 0.85
 
-					createSnowPart(
-						result.Position,
-						result.Normal
-					)
+                    if isStatic and isFloor then
+                        break
+                    end
 
-				end
+                    table.insert(excluded, hit)
+                    result = nil
+                end
 
-			end
+                if result then
+                    createSnowPart(
+                        result.Position,
+                        result.Normal
+                    )
+                end
+            end
+        end
 
-		end
-
-		task.wait(
-			getGroundDelay()
-		)
-
-	end
-
+        task.wait(getGroundDelay())
+    end
 end)
