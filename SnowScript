@@ -75,7 +75,7 @@ gui.Parent = player:WaitForChild("PlayerGui")
 -----------------------------------------------------------
 
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 300, 0, 310)
+main.Size = UDim2.new(0, 300, 0, 350)
 main.Position = UDim2.new(0.5, -150, 0.5, -125)
 
 main.BackgroundColor3 = Color3.fromRGB(25, 32, 45)
@@ -334,14 +334,14 @@ local getParticleRate = createSlider(
 	main,
 	"Снежинки",
 	125,
-	100,
+	0,
 	1500,
 	DEFAULT_PARTICLE_RATE
 )
 
 local getSnowRadiusScale = createSlider(
     main,
-    "Радиус снега",
+    "Радиус снега появления",
     190,
     0.25,
     1.5,
@@ -349,9 +349,6 @@ local getSnowRadiusScale = createSlider(
 )
 
 -- КНОПКА УДАЛЕНИЯ НАЗЕМНОГО СНЕГА
-
-
-local groundSnowEnabled = true
 
 local clearSnowButton = Instance.new("TextButton")
 clearSnowButton.Name = "ClearGroundSnow"
@@ -370,11 +367,46 @@ clearCorner.CornerRadius = UDim.new(0, 9)
 clearCorner.Parent = clearSnowButton
 
 clearSnowButton.MouseButton1Click:Connect(function()
-    groundSnowEnabled = false
     groundFolder:ClearAllChildren()
+end)
 
-    clearSnowButton.Text = "Наземный снег удалён"
-    clearSnowButton.BackgroundColor3 = Color3.fromRGB(65, 110, 75)
+-- КНОПКА СКРЫТИЯ НАЗЕМНОГО СНЕГА
+
+local groundSnowEnabled = true
+local groundSnowToggle = Instance.new("TextButton")
+groundSnowToggle.Name = "GroundSnowToggle"
+groundSnowToggle.Size = UDim2.new(1, -30, 0, 35)
+groundSnowToggle.Position = UDim2.new(0, 15, 0, 300)
+groundSnowToggle.BackgroundColor3 = Color3.fromRGB(70, 120, 70)
+groundSnowToggle.TextColor3 = Color3.new(1, 1, 1)
+groundSnowToggle.Text = "Снег на земле: ВКЛ"
+groundSnowToggle.TextSize = 14
+groundSnowToggle.Font = Enum.Font.GothamBold
+groundSnowToggle.BorderSizePixel = 0
+groundSnowToggle.Parent = main
+
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = groundSnowToggle
+
+groundSnowToggle.MouseButton1Click:Connect(function()
+    groundSnowEnabled = not groundSnowEnabled
+
+    if groundSnowEnabled then
+        groundSnowToggle.Text = "Снег на земле: ВКЛ"
+        groundSnowToggle.BackgroundColor3 = Color3.fromRGB(70, 120, 70)
+    else
+        groundSnowToggle.Text = "Снег на земле: ВЫКЛ"
+        groundSnowToggle.BackgroundColor3 = Color3.fromRGB(120, 70, 70)
+
+        -- Удаляем уже созданный наземный снег
+        for _, obj in ipairs(groundFolder:GetChildren()) do
+            if obj.Name == "Snow" then
+                obj:Destroy()
+            end
+        end
+    end
 end)
 --========================================================
 -- ПЕРЕМЕЩЕНИЕ ОКНА
@@ -621,7 +653,6 @@ end)
 
 --========================================================
 -- ❄️ СНЕГ НА ЗЕМЛЕ
---========================================================
 
 local rayParams =
 	RaycastParams.new()
@@ -681,10 +712,6 @@ local function createSnowPart(
 end
 
 --========================================================
--- ПОСТЕПЕННОЕ ПОЯВЛЕНИЕ СНЕГА НА ЗЕМЛЕ
---========================================================
-
---========================================================
 -- ❄️ СНЕГ ТОЛЬКО НА СТАТИЧНЫХ ПОВЕРХНОСТЯХ
 --========================================================
 
@@ -695,7 +722,7 @@ task.spawn(function()
         local character = player.Character
         local currentCamera = workspace.CurrentCamera
 
-        if character and currentCamera then
+        if groundSnowEnabled and character and currentCamera then
             local randomX = math.random(-SNOW_RADIUS, SNOW_RADIUS)
             local randomZ = math.random(-SNOW_RADIUS, SNOW_RADIUS)
 
