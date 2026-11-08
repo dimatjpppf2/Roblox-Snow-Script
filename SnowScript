@@ -1,8 +1,6 @@
 --// =====================================================
 --// ❄️ SNOW CONTROLLER
 --// LocalScript
---// Помести в:
---// StarterPlayer > StarterPlayerScripts
 --// =====================================================
 
 local Players = game:GetService("Players")
@@ -75,7 +73,7 @@ gui.Parent = player:WaitForChild("PlayerGui")
 -----------------------------------------------------------
 
 local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 300, 0, 350)
+main.Size = UDim2.new(0, 300, 0, 290)
 main.Position = UDim2.new(0.5, -150, 0.5, -125)
 
 main.BackgroundColor3 = Color3.fromRGB(25, 32, 45)
@@ -339,21 +337,12 @@ local getParticleRate = createSlider(
 	DEFAULT_PARTICLE_RATE
 )
 
-local getSnowRadiusScale = createSlider(
-    main,
-    "Радиус снега появления",
-    190,
-    0.25,
-    1.5,
-    0.5
-)
-
 -- КНОПКА УДАЛЕНИЯ НАЗЕМНОГО СНЕГА
 
 local clearSnowButton = Instance.new("TextButton")
 clearSnowButton.Name = "ClearGroundSnow"
 clearSnowButton.Size = UDim2.new(1, -30, 0, 38)
-clearSnowButton.Position = UDim2.new(0, 15, 0, 250)
+clearSnowButton.Position = UDim2.new(0, 15, 0, 190)
 clearSnowButton.BackgroundColor3 = Color3.fromRGB(150, 65, 65)
 clearSnowButton.Text = "Удалить снег с земли"
 clearSnowButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -376,7 +365,7 @@ local groundSnowEnabled = true
 local groundSnowToggle = Instance.new("TextButton")
 groundSnowToggle.Name = "GroundSnowToggle"
 groundSnowToggle.Size = UDim2.new(1, -30, 0, 35)
-groundSnowToggle.Position = UDim2.new(0, 15, 0, 300)
+groundSnowToggle.Position = UDim2.new(0, 15, 0, 240)
 groundSnowToggle.BackgroundColor3 = Color3.fromRGB(70, 120, 70)
 groundSnowToggle.TextColor3 = Color3.new(1, 1, 1)
 groundSnowToggle.Text = "Снег на земле: ВКЛ"
@@ -514,21 +503,165 @@ hideButton.MouseButton1Click:Connect(function()
 	miniButton.Visible = true
 
 end)
+--перемещение
+local miniDragging = false
+local miniDragStart
+local miniStartPosition
+local miniMoved = false
 
-miniButton.MouseButton1Click:Connect(function()
+miniButton.InputBegan:Connect(function(input)
 
-	main.Visible = true
-	miniButton.Visible = false
+    if
+        input.UserInputType == Enum.UserInputType.MouseButton1
+        or
+        input.UserInputType == Enum.UserInputType.Touch
+    then
+
+        miniDragging = true
+        miniMoved = false
+
+        miniDragStart = input.Position
+        miniStartPosition = miniButton.Position
+
+    end
 
 end)
 
+
+UserInputService.InputChanged:Connect(function(input)
+
+    if not miniDragging then
+        return
+    end
+
+    if
+        input.UserInputType == Enum.UserInputType.MouseMovement
+        or
+        input.UserInputType == Enum.UserInputType.Touch
+    then
+
+        local delta = input.Position - miniDragStart
+
+        if math.abs(delta.X) > 3 or math.abs(delta.Y) > 3 then
+            miniMoved = true
+        end
+
+        miniButton.Position = UDim2.new(
+            miniStartPosition.X.Scale,
+            miniStartPosition.X.Offset + delta.X,
+
+            miniStartPosition.Y.Scale,
+            miniStartPosition.Y.Offset + delta.Y
+        )
+
+    end
+
+end)
+
+
+UserInputService.InputEnded:Connect(function(input)
+
+    if
+        input.UserInputType == Enum.UserInputType.MouseButton1
+        or
+        input.UserInputType == Enum.UserInputType.Touch
+    then
+
+        if miniDragging then
+
+            miniDragging = false
+
+            if not miniMoved then
+
+                main.Position = UDim2.new(
+                    miniButton.Position.X.Scale,
+                    miniButton.Position.X.Offset - 125,
+
+                    miniButton.Position.Y.Scale,
+                    miniButton.Position.Y.Offset - 120
+                )
+
+                main.Visible = true
+                miniButton.Visible = false
+
+            end
+
+        end
+
+    end
+
+end)
+
+--========================================================
+-- ПЕРЕМЕЩЕНИЕ СКРЫТОЙ КНОПКИ
+--========================================================
+
+local miniDragging = false
+local miniDragStart
+local miniStartPosition
+
+miniButton.InputBegan:Connect(function(input)
+
+    if
+        input.UserInputType == Enum.UserInputType.MouseButton1
+        or
+        input.UserInputType == Enum.UserInputType.Touch
+    then
+
+        miniDragging = true
+        miniDragStart = input.Position
+        miniStartPosition = miniButton.Position
+
+    end
+
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+
+    if not miniDragging then
+        return
+    end
+
+    if
+        input.UserInputType == Enum.UserInputType.MouseMovement
+        or
+        input.UserInputType == Enum.UserInputType.Touch
+    then
+
+        local delta = input.Position - miniDragStart
+
+        miniButton.Position = UDim2.new(
+            miniStartPosition.X.Scale,
+            miniStartPosition.X.Offset + delta.X,
+
+            miniStartPosition.Y.Scale,
+            miniStartPosition.Y.Offset + delta.Y
+        )
+
+    end
+
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+
+    if
+        input.UserInputType == Enum.UserInputType.MouseButton1
+        or
+        input.UserInputType == Enum.UserInputType.Touch
+    then
+
+        miniDragging = false
+
+    end
+
+end)
 
 --========================================================
 -- ❄️ РАВНОМЕРНЫЙ СПАВН СНЕЖИНОК ВОКРУГ КАМЕРЫ
 --========================================================
 
-local BASE_MIN_RADIUS = 36
-local BASE_MAX_RADIUS = 150
+local BASE_MIN_RADIUS = 9
+local BASE_MAX_RADIUS = 37.5
 
 local EMITTER_COUNT = 96
 local emitters = {}
@@ -547,7 +680,6 @@ local goldenAngle = math.pi * (3 - math.sqrt(5))
 
 for i = 0, EMITTER_COUNT - 1 do
 
-    -- Равномерное распределение направлений по сфере
     local y = 1 - 2 * (i + 0.5) / EMITTER_COUNT
     local horizontal = math.sqrt(1 - y * y)
     local angle = goldenAngle * i
@@ -558,7 +690,6 @@ for i = 0, EMITTER_COUNT - 1 do
         math.sin(angle) * horizontal
     )
 
-    -- Разносим эмиттеры и по внутреннему объёму сферы
     local radialSample = (i + math.random()) / EMITTER_COUNT
 
     local attachment = Instance.new("Attachment")
@@ -578,7 +709,6 @@ for i = 0, EMITTER_COUNT - 1 do
     emitter.EmissionDirection = Enum.NormalId.Bottom
     emitter.SpreadAngle = Vector2.new(8, 8)
 
-    -- Случайный размер каждой частицы
     emitter.Size = NumberSequence.new({
         NumberSequenceKeypoint.new(0, 0.18, 0.08),
         NumberSequenceKeypoint.new(1, 0.12, 0.05)
@@ -615,15 +745,11 @@ RunService.RenderStepped:Connect(function()
     camera = workspace.CurrentCamera
     if not camera then return end
 
-    local scale = getSnowRadiusScale()
+    local minRadius = BASE_MIN_RADIUS
+    local maxRadius = BASE_MAX_RADIUS
 
-    local minRadius = BASE_MIN_RADIUS * scale
-    local maxRadius = BASE_MAX_RADIUS * scale
-
-    -- Перемещаем невидимую основу к камере
     snowEmitterPart.Position = camera.CFrame.Position
 
-    -- Обновляем количество частиц
     local currentRate = getParticleRate()
 
     if currentRate ~= lastRate then
@@ -635,7 +761,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Обновляем позиции точек появления
     for _, data in ipairs(emitters) do
 
         local radius = (
@@ -653,7 +778,7 @@ end)
 
 --========================================================
 -- ❄️ СНЕГ НА ЗЕМЛЕ
-
+--========================================================
 local rayParams =
 	RaycastParams.new()
 
@@ -746,7 +871,6 @@ task.spawn(function()
 
                 local result = nil
 
-                -- Пропускаем движущиеся объекты и стены
                 for attempt = 1, 12 do
                     rayParams.FilterType =
                         Enum.RaycastFilterType.Exclude
