@@ -6,6 +6,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -497,13 +498,139 @@ local miniCorner = Instance.new("UICorner")
 miniCorner.CornerRadius = UDim.new(0, 15)
 miniCorner.Parent = miniButton
 
-hideButton.MouseButton1Click:Connect(function()
+--========================================================
+-- АНИМАЦИЯ ОТКРЫТИЯ / СКРЫТИЯ
+--========================================================
 
+local mainScale = Instance.new("UIScale")
+mainScale.Scale = 1
+mainScale.Parent = main
+
+local mainNormalTransparency = main.BackgroundTransparency
+local miniNormalBackgroundTransparency = miniButton.BackgroundTransparency
+local miniNormalTextTransparency = miniButton.TextTransparency
+
+local menuAnimating = false
+
+local function tweenMainOpen()
+	main.Visible = true
+	mainScale.Scale = 0.85
+	main.BackgroundTransparency = 1
+
+	local scaleTween = TweenService:Create(
+		mainScale,
+		TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{Scale = 1}
+	)
+
+	local fadeTween = TweenService:Create(
+		main,
+		TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{BackgroundTransparency = mainNormalTransparency}
+	)
+
+	scaleTween:Play()
+	fadeTween:Play()
+end
+
+local function tweenMainClose()
+	local scaleTween = TweenService:Create(
+		mainScale,
+		TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+		{Scale = 0.85}
+	)
+
+	local fadeTween = TweenService:Create(
+		main,
+		TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+		{BackgroundTransparency = 1}
+	)
+
+	scaleTween:Play()
+	fadeTween:Play()
+
+	scaleTween.Completed:Wait()
 	main.Visible = false
-	miniButton.Visible = true
+	mainScale.Scale = 1
+	main.BackgroundTransparency = mainNormalTransparency
+end
 
+local function tweenMiniShow()
+	miniButton.Visible = true
+	miniButton.Size = UDim2.new(0, 0, 0, 0)
+	miniButton.BackgroundTransparency = 1
+	miniButton.TextTransparency = 1
+
+	local sizeTween = TweenService:Create(
+		miniButton,
+		TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{Size = UDim2.new(0, 50, 0, 50)}
+	)
+
+	local bgTween = TweenService:Create(
+		miniButton,
+		TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{BackgroundTransparency = miniNormalBackgroundTransparency}
+	)
+
+	local textTween = TweenService:Create(
+		miniButton,
+		TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{TextTransparency = miniNormalTextTransparency}
+	)
+
+	sizeTween:Play()
+	bgTween:Play()
+	textTween:Play()
+end
+
+local function tweenMiniHide()
+	local sizeTween = TweenService:Create(
+		miniButton,
+		TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+		{Size = UDim2.new(0, 0, 0, 0)}
+	)
+
+	local bgTween = TweenService:Create(
+		miniButton,
+		TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+		{BackgroundTransparency = 1}
+	)
+
+	local textTween = TweenService:Create(
+		miniButton,
+		TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+		{TextTransparency = 1}
+	)
+
+	sizeTween:Play()
+	bgTween:Play()
+	textTween:Play()
+
+	sizeTween.Completed:Wait()
+	miniButton.Visible = false
+	miniButton.Size = UDim2.new(0, 50, 0, 50)
+	miniButton.BackgroundTransparency = miniNormalBackgroundTransparency
+	miniButton.TextTransparency = miniNormalTextTransparency
+end
+
+hideButton.MouseButton1Click:Connect(function()
+	if menuAnimating then
+		return
+	end
+
+	menuAnimating = true
+
+	tweenMiniShow()
+	tweenMainClose()
+
+	menuAnimating = false
 end)
---перемещение
+
+--========================================================
+-- ПЕРЕМЕЩЕНИЕ / ОТКРЫТИЕ МАЛЕНЬКОЙ КНОПКОЙ
+--========================================================
+
 local miniDragging = false
 local miniDragStart
 local miniStartPosition
@@ -511,140 +638,87 @@ local miniMoved = false
 
 miniButton.InputBegan:Connect(function(input)
 
-    if
-        input.UserInputType == Enum.UserInputType.MouseButton1
-        or
-        input.UserInputType == Enum.UserInputType.Touch
-    then
+	if
+		input.UserInputType == Enum.UserInputType.MouseButton1
+		or
+		input.UserInputType == Enum.UserInputType.Touch
+	then
 
-        miniDragging = true
-        miniMoved = false
+		if menuAnimating then
+			return
+		end
 
-        miniDragStart = input.Position
-        miniStartPosition = miniButton.Position
+		miniDragging = true
+		miniMoved = false
 
-    end
+		miniDragStart = input.Position
+		miniStartPosition = miniButton.Position
 
-end)
-
-
-UserInputService.InputChanged:Connect(function(input)
-
-    if not miniDragging then
-        return
-    end
-
-    if
-        input.UserInputType == Enum.UserInputType.MouseMovement
-        or
-        input.UserInputType == Enum.UserInputType.Touch
-    then
-
-        local delta = input.Position - miniDragStart
-
-        if math.abs(delta.X) > 3 or math.abs(delta.Y) > 3 then
-            miniMoved = true
-        end
-
-        miniButton.Position = UDim2.new(
-            miniStartPosition.X.Scale,
-            miniStartPosition.X.Offset + delta.X,
-
-            miniStartPosition.Y.Scale,
-            miniStartPosition.Y.Offset + delta.Y
-        )
-
-    end
-
-end)
-
-
-UserInputService.InputEnded:Connect(function(input)
-
-    if
-        input.UserInputType == Enum.UserInputType.MouseButton1
-        or
-        input.UserInputType == Enum.UserInputType.Touch
-    then
-
-        if miniDragging then
-
-            miniDragging = false
-
-            if not miniMoved then
-
-                main.Visible = true
-                miniButton.Visible = false
-
-            end
-
-        end
-
-    end
-
-end)
-
---========================================================
--- ПЕРЕМЕЩЕНИЕ СКРЫТОЙ КНОПКИ
---========================================================
-
-local miniDragging = false
-local miniDragStart
-local miniStartPosition
-
-miniButton.InputBegan:Connect(function(input)
-
-    if
-        input.UserInputType == Enum.UserInputType.MouseButton1
-        or
-        input.UserInputType == Enum.UserInputType.Touch
-    then
-
-        miniDragging = true
-        miniDragStart = input.Position
-        miniStartPosition = miniButton.Position
-
-    end
+	end
 
 end)
 
 UserInputService.InputChanged:Connect(function(input)
 
-    if not miniDragging then
-        return
-    end
+	if not miniDragging then
+		return
+	end
 
-    if
-        input.UserInputType == Enum.UserInputType.MouseMovement
-        or
-        input.UserInputType == Enum.UserInputType.Touch
-    then
+	if
+		input.UserInputType == Enum.UserInputType.MouseMovement
+		or
+		input.UserInputType == Enum.UserInputType.Touch
+	then
 
-        local delta = input.Position - miniDragStart
+		local delta = input.Position - miniDragStart
 
-        miniButton.Position = UDim2.new(
-            miniStartPosition.X.Scale,
-            miniStartPosition.X.Offset + delta.X,
+		if math.abs(delta.X) > 3 or math.abs(delta.Y) > 3 then
+			miniMoved = true
+		end
 
-            miniStartPosition.Y.Scale,
-            miniStartPosition.Y.Offset + delta.Y
-        )
+		miniButton.Position = UDim2.new(
+			miniStartPosition.X.Scale,
+			miniStartPosition.X.Offset + delta.X,
 
-    end
+			miniStartPosition.Y.Scale,
+			miniStartPosition.Y.Offset + delta.Y
+		)
+
+	end
 
 end)
 
 UserInputService.InputEnded:Connect(function(input)
 
-    if
-        input.UserInputType == Enum.UserInputType.MouseButton1
-        or
-        input.UserInputType == Enum.UserInputType.Touch
-    then
+	if
+		input.UserInputType == Enum.UserInputType.MouseButton1
+		or
+		input.UserInputType == Enum.UserInputType.Touch
+	then
 
-        miniDragging = false
+		if miniDragging then
 
-    end
+			miniDragging = false
+
+			if not miniMoved then
+
+				if menuAnimating then
+					return
+				end
+
+				menuAnimating = true
+
+				tweenMiniHide()
+
+				tweenMainOpen()
+
+				menuAnimating = false
+
+			end
+
+		end
+
+	end
 
 end)
 
